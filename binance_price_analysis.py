@@ -26,16 +26,32 @@ def main():
             print(f"Binance API Error: {e}")
             print("Invalid symbol. Please try again.")
 
-    start_date, end_date = None, None
+    start_date = None
 
-    while start_date is None or end_date is None or end_date < start_date:
+    while start_date is None:
         try:
             start_date = get_date_input('Enter the start date (e.g., "YYYY-MM-DD")')
+
+            if start_date:
+                break  # Break the loop if the start date is valid
+            else:
+                print("Invalid date format. Please try again.")
+
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Invalid date format. Please try again.")
+
+    end_date = None
+
+    while end_date is None or end_date < start_date:
+        try:
             end_date = get_date_input('Enter the end date (e.g., "YYYY-MM-DD")')
 
             if end_date < start_date:
                 print("End date cannot be earlier than start date. Please try again.")
-                end_date = get_date_input('Enter the end date (e.g., "YYYY-MM-DD")')  # Allow the user to modify only the end date
+            else:
+                break  # Break the loop if the end date is valid
+
         except ValueError as e:
             print(f"Error: {e}")
             print("Invalid date format. Please try again.")
