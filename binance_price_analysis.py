@@ -1,87 +1,95 @@
 import pandas as pd
 from binance.client import Client
+from binance.exceptions import BinanceAPIException
 from datetime import datetime
 
-columns = [
-    "open_time",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-    "close_time",
-    "quote_vol",
-    "num_trades",
-    "taker_buy_base_vol",
-    "taker_buy_quote_vol",
-    "ignore",
-]
-
-
 def main():
-    Pkey = get_user_input("Enter Your Binance API key")
-    Skey = get_user_input("Enter Your Binance SECRET key")
-    Symbol = get_user_input("Enter the symbol (e.g., BTCUSDT)")
+    client = None
 
-    # Ask the user to choose the date format
-    date_format = get_date_format()
+    while client is None:
+        try:
+            Pkey = get_user_input("Enter Your Binance API key")
+            Skey = get_user_input("Enter Your Binance SECRET key")
+            client = Client(api_key=Pkey, api_secret=Skey)
+        except BinanceAPIException as e:
+            print(f"Binance API Error: {e}")
+            print("Invalid API key or secret key. Please try again.")
 
-    From = get_date_input('Enter the start date (e.g., "DD-MM-YYYY")', date_format)
-    To = get_date_input('Enter the end date (e.g., "DD-MM-YYYY")', date_format)
+    symbol = None
 
-    client = Client(api_key=Pkey, api_secret=Skey)
+    while symbol is None:
+        try:
+            symbol = get_user_input("Enter the symbol (e.g., BTCUSDT)")
+            # Check if the symbol is valid
+            client.get_symbol_info(symbol)
+        except BinanceAPIException as e:
+            print(f"Binance API Error: {e}")
+            print("Invalid symbol. Please try again.")
 
-    klines = client.get_historical_klines(Symbol, Client.KLINE_INTERVAL_1DAY, From, To)
+    start_date, end_date = None, None
 
-    if klines:
-        df = pd.DataFrame(klines, columns=columns)
+    while start_date is None or end_date is None or end_date < start_date:
+        try:
+            start_date = get_date_input('Enter the start date (e.g., "YYYY-MM-DD")')
+            end_date = get_date_input('Enter the end date (e.g., "YYYY-MM-DD")')
 
-        # Convert relevant columns to numeric
-        numeric_columns = ["open", "high", "low", "close", "volume", "quote_vol"]
-        df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors="coerce")
+            if end_date < start_date:
+                print("End date cannot be earlier than start date. Please try again.")
+                end_date = get_date_input('Enter the end date (e.g., "YYYY-MM-DD")')  # Allow the user to modify only the end date
+        except ValueError as e:
+            print(f"Error: {e}")
+            print("Invalid date format. Please try again.")
 
-        max_price = df["high"].max()
-        low_price = df["low"].min()
-        pct_change = round((max_price - low_price) / low_price * 100, 2)
-        pct_change = abs(pct_change)  # Make sure it's positive for display purposes
+    try:
+        klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1DAY, start_date, end_date)
 
-        print(f"Max Price: {max_price}")
-        print(f"Low Price: {low_price}")
-        print("Percentage Change:", pct_change, "%")
-    else:
-        print("No data available for the specified period or symbol.")
+        if klines:
+            columns = [
+                "open_time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "close_time",
+                "quote_vol",
+                "num_trades",
+                "taker_buy_base_vol",
+                "taker_buy_quote_vol",
+                "ignore",
+            ]
+            df = pd.DataFrame(klines, columns=columns)
 
+            # Convert relevant columns to numeric
+            numeric_columns = ["open", "high", "low", "close", "volume", "quote_vol"]
+            df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors="coerce")
+
+            max_price = max(df["high"])
+            low_price = min(df["low"])
+            pct_change = round((max_price - low_price) / low_price * 100, 2)
+            pct_change = abs(pct_change)  # Make sure it's positive for display purposes
+
+            print(f"Max Price: {max_price} $")
+            print(f"Low Price: {low_price} $")
+            print("Percentage Change:", pct_change, "%")
+        else:
+            print(f"No data available for symbol '{symbol}' in the specified period.")
+    except BinanceAPIException as e:
+        print(f"Binance API Error: {e}")
+        print("Invalid symbol. Please try again.")
 
 def get_user_input(prompt):
     return input(f"{prompt}: ")
 
-
-def get_date_input(prompt, date_format):
+def get_date_input(prompt):
     date_str = input(f"{prompt}: ")
+    date_format = "%Y-%m-%d"
+
     try:
-        # Parse the entered date based on the chosen format
-        date_obj = datetime.strptime(date_str, date_format).strftime("%Y-%m-%d")
+        date_obj = datetime.strptime(date_str, date_format).strftime(date_format)
         return date_obj
     except ValueError:
-        print(f"Invalid date format. Please use {date_format}.")
-        return get_date_input(prompt, date_format)
-
-
-def get_date_format():
-    while True:
-        # Provide options for date format
-        print("Choose the date format:")
-        print("1. DD-MM-YYYY")
-        print("2. MM-DD-YYYY")
-        choice = input("Enter the number of your choice: ")
-
-        if choice == "1":
-            return "%d-%m-%Y"
-        elif choice == "2":
-            return "%m-%d-%Y"
-        else:
-            print("Invalid choice. Please enter 1 or 2.")
-
+        raise ValueError("Invalid date format. Please use YYYY-MM-DD.")
 
 if __name__ == "__main__":
     main()
